@@ -1,0 +1,25 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-security-restricted
+  annotations:
+    policies.kyverno.io/title: Pod Security Standard "restricted"
+    policies.kyverno.io/description: >-
+      Non-root, no privilege escalation, all capabilities dropped, RuntimeDefault
+      seccomp, no host namespaces or hostPath. Baseline hygiene for a bank-facing
+      platform; the golden-path chart already satisfies all of it.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: restricted
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      validate:
+        podSecurity:
+          level: restricted
+          version: latest

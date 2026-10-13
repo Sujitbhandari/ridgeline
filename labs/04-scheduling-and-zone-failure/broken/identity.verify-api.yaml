@@ -1,0 +1,9 @@
+# Pinned to one zone "because that's where the node pool was", spreading off.
+scheduling:
+  spreadAcrossZones: false
+  spreadAcrossNodes: false
+  nodeSelector:
+    topology.kubernetes.io/zone: lab-a
+autoscaling:
+  minReplicas: 4
+  maxReplicas: 4

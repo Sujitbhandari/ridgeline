@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "platform-service values",
+  "type": "object",
+  "required": ["team", "image", "size", "slo"],
+  "properties": {
+    "team": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Owning team. Alerts route to it."
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": {
+          "type": "string",
+          "minLength": 1,
+          "not": { "enum": ["latest", "main", "master"] },
+          "description": "Immutable tag or digest. Moving tags make rollbacks lie."
+        },
+        "pullPolicy": { "enum": ["IfNotPresent", "Always"] }
+      }
+    },
+    "size": { "enum": ["small", "medium", "large", "custom"] },
+    "port": { "type": "integer", "minimum": 1024, "maximum": 65535 },
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "metric": { "enum": ["inflight", "cpu"] },
+        "minReplicas": { "type": "integer", "minimum": 2 },
+        "maxReplicas": { "type": "integer", "minimum": 2, "maximum": 100 }
+      }
+    },
+    "slo": {
+      "type": "object",
+      "required": ["availability", "latencyThreshold", "latencyTarget"],
+      "properties": {
+        "availability": { "type": "number", "minimum": 90, "maximum": 99.999 },
+        "latencyThreshold": { "type": "string", "pattern": "^[0-9.]+$" },
+        "latencyTarget": { "type": "number", "minimum": 50, "maximum": 99.99 }
+      }
+    },
+    "rollout": {
+      "type": "object",
+      "properties": { "strategy": { "enum": ["rolling", "canary"] } }
+    },
+    "network": {
+      "type": "object",
+      "properties": {
+        "ingressFrom": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["namespace", "app"],
+            "properties": { "namespace": { "type": "string" }, "app": { "type": "string" } }
+          }
+        },
+        "public": { "type": "boolean" }
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# Tenant namespaces. The ridgeline.dev/tenant label is what makes Kyverno
+# generate default-deny NetworkPolicies and a LimitRange inside them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: identity
+  labels: { ridgeline.dev/tenant: "true", ridgeline.dev/environment: lab, ridgeline.dev/team: identity }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: risk
+  labels: { ridgeline.dev/tenant: "true", ridgeline.dev/environment: lab, ridgeline.dev/team: risk }
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data
+  labels: { ridgeline.dev/tenant: "true", ridgeline.dev/environment: lab, ridgeline.dev/team: data }

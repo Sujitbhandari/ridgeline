@@ -1,0 +1,78 @@
+# Platform-level signals that no single service owns. Service SLO alerts are
+# generated per service by the platform-service chart.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ridgeline-platform
+  namespace: observability
+  labels: { release: kube-prometheus-stack }
+spec:
+  groups:
+    - name: ridgeline.capacity
+      rules:
+        - alert: ContainerCPUThrottlingHigh
+          # >25% of CFS periods throttled usually means the CPU limit, not the
+          # node, is the bottleneck. See labs/02-cpu-throttling.
+          expr: |
+            sum by (namespace, pod, container) (rate(container_cpu_cfs_throttled_periods_total{container!=""}[5m]))
+            /
+            sum by (namespace, pod, container) (rate(container_cpu_cfs_periods_total{container!=""}[5m]))
+            > 0.25
+          for: 15m
+          labels: { severity: ticket }
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} is CPU-throttled {{ $value | humanizePercentage }} of the time"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/cpu-throttling.md
+        - alert: PodsPendingTooLong
+          expr: sum by (namespace) (kube_pod_status_phase{phase="Pending"}) > 0
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: "Pods in {{ $labels.namespace }} have been Pending for 10m (capacity, requests, or spread constraints)"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/pods-pending.md
+        - alert: ZoneImbalance
+          # A service whose replicas sit mostly in one zone loses most of its
+          # capacity when that zone goes away.
+          expr: |
+            max by (namespace, label_app_kubernetes_io_name) (
+              count by (namespace, label_app_kubernetes_io_name, zone) (
+                kube_pod_info * on (node) group_left(zone)
+                  label_replace(kube_node_labels, "zone", "$1", "label_topology_kubernetes_io_zone", "(.+)")
+                * on (namespace, pod) group_left(label_app_kubernetes_io_name) kube_pod_labels
+              )
+            )
+            /
+            count by (namespace, label_app_kubernetes_io_name) (
+              kube_pod_info * on (namespace, pod) group_left(label_app_kubernetes_io_name) kube_pod_labels
+            ) > 0.6
+          for: 30m
+          labels: { severity: ticket }
+          annotations:
+            summary: "Over 60% of {{ $labels.label_app_kubernetes_io_name }} replicas are in a single zone"
+    - name: ridgeline.upstreams
+      rules:
+        - alert: UpstreamConnectionsSaturated
+          expr: |
+            sum by (service, upstream) (upstream_pool_in_use)
+            /
+            sum by (service, upstream) (upstream_pool_size) > 0.9
+          for: 5m
+          labels: { severity: page }
+          annotations:
+            summary: "{{ $labels.service }} has used >90% of its {{ $labels.upstream }} connection pool for 5m"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/connection-exhaustion.md
+        - alert: DatastoreConnectionCeilingNear
+          expr: max by (service) (datastore_active_connections / datastore_max_connections) > 0.8
+          for: 5m
+          labels: { severity: page }
+          annotations:
+            summary: "{{ $labels.service }} datastore at {{ $value | humanizePercentage }} of max connections"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/connection-exhaustion.md
+    - name: ridgeline.telemetry
+      rules:
+        - alert: OtelCollectorDroppingSpans
+          expr: sum(rate(otelcol_exporter_send_failed_spans_total[5m])) > 0
+          for: 10m
+          labels: { severity: ticket }
+          annotations:
+            summary: "The OpenTelemetry Collector is failing to export spans; traces are incomplete."

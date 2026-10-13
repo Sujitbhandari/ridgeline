@@ -1,0 +1,91 @@
+# platform-service: what a developer has to decide is at the top.
+# Everything below "Platform defaults" is a decision the platform team already
+# made; override it only with a reason (and expect a reviewer to ask).
+
+# --- You must set these -------------------------------------------------------
+team: ""                     # owning team, e.g. identity. Used for routing alerts.
+image:
+  repository: ""
+  tag: ""                    # immutable tag or digest; "latest" is rejected
+  pullPolicy: IfNotPresent
+
+# --- You probably want to set these -----------------------------------------
+port: 8080
+env: {}                      # plain, non-secret environment variables
+secretEnvFrom: []            # names of Secrets to expose as env (synced by External Secrets)
+
+# small | medium | large | custom. Presets set requests and a memory limit,
+# but deliberately NO CPU limit: CFS throttling causes tail latency on bursty
+# request handlers (see labs/02-cpu-throttling).
+size: small
+resources: {}                # only read when size: custom
+cpuLimit: ""                 # escape hatch, e.g. "500m". Leave empty unless you measured.
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  # inflight: KEDA scales on concurrent requests per pod (Prometheus query).
+  #           Tracks real load for I/O-bound services where CPU stays low.
+  # cpu:      plain HPA on CPU utilization of requests.
+  metric: inflight
+  targetInflightPerPod: 20
+  targetCPUUtilization: 70
+replicas: 2                  # used only when autoscaling is disabled
+
+slo:
+  availability: 99.9         # percent of non-5xx responses, 30-day window
+  latencyThreshold: "0.3"    # seconds; must be a histogram bucket edge
+  latencyTarget: 99          # percent of requests faster than the threshold
+
+network:
+  # Who may call this service, in addition to the ingress controller.
+  # Cross-team paths are normally granted with an AccessRequest instead.
+  ingressFrom: []            # - { namespace: identity, app: verify-api }
+  public: false              # true lets the ingress controller reach it
+
+rollout:
+  # rolling: Deployment with maxUnavailable 0.
+  # canary:  Argo Rollouts canary gated on the SLO error rate (auto-abort).
+  strategy: rolling
+  canarySteps:
+    - setWeight: 10
+    - pause: { duration: 2m }
+    - setWeight: 30
+    - pause: { duration: 3m }
+    - setWeight: 60
+    - pause: { duration: 3m }
+
+# --- Platform defaults --------------------------------------------------------
+environment: lab
+aws:
+  accountId: ""              # set per environment by GitOps; enables IRSA when non-empty
+
+probes:
+  livenessPath: /healthz
+  readinessPath: /readyz
+  # startupProbe allows this long before liveness can restart the container,
+  # so slow starts don't become crash loops (labs/05-probes-and-shutdown).
+  startupTimeoutSeconds: 60
+
+shutdown:
+  preStopSleepSeconds: 5     # lets endpoints/ingress stop routing before SIGTERM
+  terminationGracePeriodSeconds: 30
+
+scheduling:
+  spreadAcrossZones: true    # hard: never stack all replicas in one AZ
+  spreadAcrossNodes: true    # soft: prefer one replica per node
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+
+disruptionBudget:
+  maxUnavailable: 1
+
+observability:
+  scrapeInterval: 15s
+  # Node-local OpenTelemetry Collector (DaemonSet), reached via the host IP so
+  # spans never cross a zone boundary before batching.
+  otlpPort: 4317
+  alertSeverityPage: page
+  alertSeverityTicket: ticket

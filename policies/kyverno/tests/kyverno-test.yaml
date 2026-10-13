@@ -1,0 +1,25 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: ridgeline-guardrails
+policies:
+  - ../require-resources.yaml
+  - ../require-probes.yaml
+  - ../pod-security.yaml
+  - ../require-ownership.yaml
+  - ../images.yaml
+resources:
+  - resources.yaml
+variables: values.yaml
+results:
+  - { policy: require-resources, rule: requests-and-memory-limit, resources: [golden-path, untagged], kind: Pod, result: pass }
+  - { policy: require-resources, rule: requests-and-memory-limit, resources: [cowboy], kind: Pod, result: fail }
+  - { policy: require-probes, rule: readiness-and-liveness, resources: [golden-path], kind: Pod, result: pass }
+  - { policy: require-probes, rule: readiness-and-liveness, resources: [cowboy, untagged], kind: Pod, result: fail }
+  - { policy: pod-security-restricted, rule: restricted, resources: [golden-path], kind: Pod, result: pass }
+  - { policy: pod-security-restricted, rule: restricted, resources: [cowboy], kind: Pod, result: fail }
+  - { policy: require-ownership, rule: team-label, resources: [unowned], kind: Deployment, result: fail }
+  - { policy: image-provenance, rule: trusted-registry, resources: [golden-path], kind: Pod, result: pass }
+  - { policy: image-provenance, rule: trusted-registry, resources: [cowboy], kind: Pod, result: fail }
+  - { policy: image-provenance, rule: no-mutable-tags, resources: [golden-path], kind: Pod, result: pass }
+  - { policy: image-provenance, rule: no-mutable-tags, resources: [cowboy, untagged], kind: Pod, result: fail }

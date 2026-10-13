@@ -1,0 +1,11 @@
+{{ include "ps.name" . }} deployed via the Ridgeline golden path ({{ .Values.rollout.strategy }}).
+
+SLO: {{ .Values.slo.availability }}% availability, {{ .Values.slo.latencyTarget }}% of requests under {{ .Values.slo.latencyThreshold }}s.
+Alerts route to team "{{ .Values.team }}".
+
+Check it:
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/name={{ include "ps.name" . }} -o wide
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "ps.name" . }} 8080:{{ .Values.port }}
+
+Need to call another team's service or an AWS resource? Open an AccessRequest:
+  access-requests/<env>/<name>.yaml  (see access-requests/README.md)

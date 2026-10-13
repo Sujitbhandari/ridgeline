@@ -1,0 +1,5 @@
+# A release that fails 5% of requests. risk-scorer uses the canary strategy,
+# so this should never get past the first canary step.
+env:
+  MAX_ACTIVE_CONNECTIONS: "100"
+  CHAOS_ERROR_RATE: "0.05"

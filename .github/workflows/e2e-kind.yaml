@@ -1,0 +1,53 @@
+name: e2e-kind
+# Deploys both services with the golden-path chart onto a throwaway kind
+# cluster on every PR that touches them, and runs a smoke test through the
+# Service. Catches what linting can't: bad probes, crash loops, broken wiring.
+on:
+  pull_request:
+    paths: [services/**, charts/**, gitops/tenants/**]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with: { cluster_name: e2e, node_image: "kindest/node:v1.32.2" }
+      - name: CRDs the chart renders against
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add kedacore https://kedacore.github.io/charts
+          helm install prom-crds prometheus-community/prometheus-operator-crds --wait
+          helm install keda kedacore/keda -n keda --create-namespace --wait
+      - name: Build and load images
+        run: |
+          for app in verify_api risk_scorer; do
+            img="ridgeline/${app//_/-}:0.1.0"
+            docker build -q --build-arg APP="$app" -t "$img" services
+            kind load docker-image "$img" --name e2e
+          done
+      - name: Deploy with the golden path
+        run: |
+          for svc in identity/verify-api risk/risk-scorer; do
+            ns=${svc%/*}; app=${svc#*/}
+            kubectl create namespace "$ns"
+            helm template "$app" charts/platform-service -n "$ns" \
+              -f "gitops/tenants/lab/$ns/$app/values.yaml" \
+              --set rollout.strategy=rolling --set scheduling.spreadAcrossZones=false --set scheduling.priorityClassName= \
+              | kubectl apply -n "$ns" -f -
+          done
+          kubectl -n risk rollout status deploy/risk-scorer --timeout=180s
+          kubectl -n identity rollout status deploy/verify-api --timeout=180s
+      - name: Smoke test through the Service
+        run: |
+          kubectl -n identity port-forward svc/verify-api 8080:8080 &
+          sleep 3
+          curl -sf -X POST localhost:8080/v1/verify -H 'content-type: application/json' \
+            -d '{"phone_number":"+1 214 555 0142","consent":true}' | tee /dev/stderr | grep -q decision
+          curl -sf localhost:8080/metrics | grep -q 'http_requests_total{code="200"'
+      - if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl get events -A --sort-by=.lastTimestamp | tail -50

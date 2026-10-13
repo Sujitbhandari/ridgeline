@@ -1,0 +1,11 @@
+team: risk
+environment: staging
+aws: { accountId: "222222222222" }
+image: { repository: ghcr.io/sujitbhandari/risk-scorer, tag: "sha-3f9c2e1" }
+size: medium
+cpuLimit: "1"
+autoscaling: { metric: cpu, minReplicas: 3, maxReplicas: 30 }
+rollout: { strategy: canary }
+network:
+  ingressFrom:
+    - { namespace: identity, app: verify-api }

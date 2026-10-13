@@ -1,0 +1,59 @@
+{{- $autoscaled := .Values.autoscaling.enabled -}}
+{{- if eq .Values.rollout.strategy "canary" }}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "ps.name" . }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  {{- if not $autoscaled }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "ps.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "ps.podTemplate" . | nindent 4 }}
+  strategy:
+    canary:
+      # Error rate is measured on canary pods only, via the
+      # rollouts-pod-template-hash label Prometheus attaches to every series.
+      analysis:
+        templates:
+          - templateName: {{ include "ps.name" . }}-slo
+        startingStep: 1
+        args:
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+      steps:
+        {{- toYaml .Values.rollout.canarySteps | nindent 8 }}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ps.name" . }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  {{- if not $autoscaled }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  # A pod must stay Ready this long before it counts as available, which
+  # stops a rollout from racing ahead of a pod that crashes after 10 seconds.
+  minReadySeconds: 10
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "ps.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "ps.podTemplate" . | nindent 4 }}
+{{- end }}

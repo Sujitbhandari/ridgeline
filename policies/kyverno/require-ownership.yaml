@@ -1,0 +1,26 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-ownership
+  annotations:
+    policies.kyverno.io/title: Every workload has an owning team
+    policies.kyverno.io/description: >-
+      An alert nobody owns is an alert nobody answers. The team label drives
+      Alertmanager routing and cost allocation.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: team-label
+      match:
+        any:
+          - resources:
+              kinds: [Deployment, StatefulSet, argoproj.io/v1alpha1/Rollout]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      validate:
+        message: "Set the ridgeline.dev/team label (the platform-service chart does this from .Values.team)."
+        pattern:
+          metadata:
+            labels:
+              ridgeline.dev/team: "?*"

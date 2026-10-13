@@ -1,0 +1,62 @@
+{{- /*
+Every namespace already has a default-deny policy (gitops/platform/baseline).
+This opens only what every service needs on the platform:
+  ingress: Prometheus scraping, the ingress controller (if public), declared callers
+  egress:  DNS and the node-local OpenTelemetry Collector
+Anything else (another team's service, an AWS endpoint, an external API) is
+granted by an AccessRequest, which renders its own NetworkPolicy.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ps.name" . }}-baseline
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ps.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+      ports:
+        - { protocol: TCP, port: {{ .Values.port }} }
+    {{- if .Values.network.public }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { protocol: TCP, port: {{ .Values.port }} }
+    {{- end }}
+    {{- range .Values.network.ingressFrom }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .app }}
+      ports:
+        - { protocol: TCP, port: {{ $.Values.port }} }
+    {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # OTLP to the collector on this node (hostNetwork DaemonSet port).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - { protocol: TCP, port: {{ .Values.observability.otlpPort }} }

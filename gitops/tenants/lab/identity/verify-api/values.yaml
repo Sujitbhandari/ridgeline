@@ -1,0 +1,26 @@
+# Everything identity needs to say about verify-api in the lab.
+# The rest (probes, spreading, SLO alerts, network baseline...) is the platform.
+team: identity
+environment: lab
+image:
+  repository: ridgeline/verify-api
+  tag: "0.1.0"
+size: small
+network:
+  # In-cluster load generator (loadtest/k6-job.yaml) is the only external caller in the lab.
+  ingressFrom:
+    - { namespace: loadtest, app: k6 }
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  UPSTREAM_POOL_SIZE: "10"
+autoscaling:
+  metric: inflight
+  minReplicas: 2
+  maxReplicas: 30
+  targetInflightPerPod: 20
+scheduling:
+  priorityClassName: customer-facing
+slo:
+  availability: 99.9
+  latencyThreshold: "0.3"
+  latencyTarget: 99

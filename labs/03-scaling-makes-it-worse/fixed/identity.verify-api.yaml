@@ -1,0 +1,9 @@
+# Budget the downstream: maxReplicas x pool <= 80% of the ceiling.
+#   12 x 4 = 48 <= 0.8 x 60.  Excess load queues in the caller (bounded by the
+#   upstream timeout) instead of being refused by the datastore.
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  UPSTREAM_POOL_SIZE: "4"
+autoscaling:
+  minReplicas: 4
+  maxReplicas: 12

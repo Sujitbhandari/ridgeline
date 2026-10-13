@@ -1,0 +1,75 @@
+name: access-request
+on:
+  pull_request:
+    paths: [access-requests/**]
+  push:
+    branches: [main]
+    paths: [access-requests/**]
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v5
+        with: { go-version-file: tools/accessctl/go.mod }
+      - name: Explain the changed requests
+        id: explain
+        run: |
+          changed=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD -- 'access-requests/*.yaml' 'access-requests/**/*.yaml' \
+                    | grep -v -e '^access-requests/rendered/' -e 'catalog.yaml' || true)
+          if [ -z "$changed" ]; then echo "No request files changed." > plan.md; exit 0; fi
+          set +e
+          # shellcheck disable=SC2086  # word splitting of the file list is intended
+          go run ./tools/accessctl explain $changed > plan.md
+          # shellcheck disable=SC2086
+          go run ./tools/accessctl validate $changed
+          echo "valid=$?" >> "$GITHUB_OUTPUT"
+      - uses: marocchino/sticky-pull-request-comment@v2
+        with: { header: access-plan, path: plan.md }
+      - if: steps.explain.outputs.valid != '0' && steps.explain.outputs.valid != ''
+        run: exit 1
+
+  apply-iam:
+    # Applies rendered IAM grants per environment. Requires an AWS role that
+    # trusts this repo via GitHub OIDC (no long-lived keys).
+    if: github.event_name == 'push' && vars.AWS_ACCESS_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        env: [dev, staging]
+    environment: ${{ matrix.env }}      # prod adds required reviewers in repo settings
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.11.4 }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ACCESS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Plan
+        working-directory: infra/terraform/access
+        run: |
+          cp ../../../access-requests/rendered/${{ matrix.env }}/iam/*.tf.json . 2>/dev/null || true
+          terraform init -input=false -backend-config=backend-${{ matrix.env }}.hcl
+          terraform plan -input=false -out=plan.out
+          terraform show -json plan.out > plan.json
+      - name: Policy check on the plan
+        run: |
+          curl -sSL https://github.com/open-policy-agent/conftest/releases/download/v0.58.0/conftest_0.58.0_Linux_x86_64.tar.gz | tar xz conftest
+          ./conftest test --policy policies/terraform infra/terraform/access/plan.json
+      - name: Apply
+        working-directory: infra/terraform/access
+        run: terraform apply -input=false plan.out

@@ -1,0 +1,131 @@
+{{- $name := include "ps.name" . -}}
+{{- $sel := printf "service=\"%s\", namespace=\"%s\"" $name .Release.Namespace -}}
+{{- $budget := printf "(1 - %v / 100)" .Values.slo.availability -}}
+{{- $latBudget := printf "(1 - %v / 100)" .Values.slo.latencyTarget -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "ps.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.observability.scrapeInterval }}
+      # The app's own "service" label is authoritative.
+      honorLabels: true
+  # Lets canary analysis compare the new ReplicaSet against the stable one.
+  podTargetLabels:
+    - rollouts-pod-template-hash
+    - ridgeline.dev/team
+---
+# SLOs come for free with the golden path. Burn-rate alerting follows the
+# multi-window, multi-burn-rate method from the Google SRE Workbook:
+#   page   when 2% of the 30-day budget burns in 1h (14.4x) or 5% in 6h (6x)
+#   ticket when 10% burns in 3 days (1x)
+# Short windows (5m/30m/6h) make alerts reset quickly once the burn stops.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $name }}-slo
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ $name }}-slo.recording
+      interval: 30s
+      rules:
+        {{- range $w := list "5m" "30m" "1h" "6h" "3d" }}
+        - record: slo:error_ratio:rate{{ $w }}
+          expr: |
+            sum(rate(http_requests_total{ {{- $sel }}, code=~"5.."}[{{ $w }}]))
+            /
+            sum(rate(http_requests_total{ {{- $sel }}}[{{ $w }}]))
+          labels:
+            service: {{ $name }}
+            namespace: {{ $.Release.Namespace }}
+        - record: slo:slow_ratio:rate{{ $w }}
+          expr: |
+            1 - (
+              sum(rate(http_request_duration_seconds_bucket{ {{- $sel }}, le="{{ $.Values.slo.latencyThreshold }}"}[{{ $w }}]))
+              /
+              sum(rate(http_request_duration_seconds_count{ {{- $sel }}}[{{ $w }}]))
+            )
+          labels:
+            service: {{ $name }}
+            namespace: {{ $.Release.Namespace }}
+        {{- end }}
+    - name: {{ $name }}-slo.alerts
+      rules:
+        {{- range $sli := list (dict "kind" "error" "label" "availability" "budget" $budget "target" (printf "%v%%" $.Values.slo.availability)) (dict "kind" "slow" "label" "latency" "budget" $latBudget "target" (printf "%v%% under %ss" $.Values.slo.latencyTarget $.Values.slo.latencyThreshold)) }}
+        {{- $r := printf "slo:%s_ratio" $sli.kind }}
+        {{- $f := printf "{service=\"%s\", namespace=\"%s\"}" $name $.Release.Namespace }}
+        - alert: {{ $name | camelcase | replace "-" "" }}{{ $sli.label | title }}BudgetFastBurn
+          expr: |
+            (
+              {{ $r }}:rate1h{{ $f }} > (14.4 * {{ $sli.budget }})
+              and
+              {{ $r }}:rate5m{{ $f }} > (14.4 * {{ $sli.budget }})
+            )
+            or
+            (
+              {{ $r }}:rate6h{{ $f }} > (6 * {{ $sli.budget }})
+              and
+              {{ $r }}:rate30m{{ $f }} > (6 * {{ $sli.budget }})
+            )
+          for: 2m
+          labels:
+            severity: {{ $.Values.observability.alertSeverityPage }}
+            team: {{ $.Values.team }}
+            service: {{ $name }}
+            slo: {{ $sli.label }}
+          annotations:
+            summary: "{{ $name }} is burning its {{ $sli.label }} error budget fast (target {{ $sli.target }})"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/slo-burn.md
+        - alert: {{ $name | camelcase | replace "-" "" }}{{ $sli.label | title }}BudgetSlowBurn
+          expr: |
+            {{ $r }}:rate3d{{ $f }} > (1 * {{ $sli.budget }})
+            and
+            {{ $r }}:rate6h{{ $f }} > (1 * {{ $sli.budget }})
+          for: 1h
+          labels:
+            severity: {{ $.Values.observability.alertSeverityTicket }}
+            team: {{ $.Values.team }}
+            service: {{ $name }}
+            slo: {{ $sli.label }}
+          annotations:
+            summary: "{{ $name }} will exhaust its {{ $sli.label }} budget before the window ends (target {{ $sli.target }})"
+            runbook_url: https://github.com/Sujitbhandari/ridgeline/blob/main/docs/runbooks/slo-burn.md
+        {{- end }}
+{{- if eq .Values.rollout.strategy "canary" }}
+---
+# Canary gate: abort and roll back automatically if canary pods breach the
+# availability SLO, before most users ever see the new version.
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ $name }}-slo
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: canary-hash
+  metrics:
+    - name: canary-error-ratio
+      interval: 30s
+      count: 10
+      failureLimit: 2
+      # No traffic yet is "inconclusive", not "healthy".
+      successCondition: len(result) > 0 && result[0] <= {{ printf "%.6f" (divf (subf 100 .Values.slo.availability) 100) }}
+      provider:
+        prometheus:
+          address: http://kube-prometheus-stack-prometheus.observability.svc:9090
+          query: |
+            sum(rate(http_requests_total{ {{- $sel }}, code=~"5..", rollouts_pod_template_hash="{{ "{{" }}args.canary-hash{{ "}}" }}"}[1m]))
+            /
+            sum(rate(http_requests_total{ {{- $sel }}, rollouts_pod_template_hash="{{ "{{" }}args.canary-hash{{ "}}" }}"}[1m]))
+{{- end }}

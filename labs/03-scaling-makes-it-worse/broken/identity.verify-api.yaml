@@ -1,0 +1,7 @@
+# "Latency is up, add pods." 12+ replicas x 20 connections each.
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  UPSTREAM_POOL_SIZE: "20"
+autoscaling:
+  minReplicas: 12
+  maxReplicas: 30

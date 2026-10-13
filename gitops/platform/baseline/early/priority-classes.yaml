@@ -1,0 +1,22 @@
+# When the cluster is full, the scheduler preempts lower-priority pods first.
+# Customer-facing request paths outrank batch work; telemetry outranks both,
+# because losing observability during an incident makes every incident worse.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: platform-critical }
+value: 100000
+description: Telemetry and admission control.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: customer-facing }
+value: 10000
+globalDefault: false
+description: Synchronous request paths that customers wait on.
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata: { name: batch-low }
+value: 100
+preemptionPolicy: Never
+description: Batch and analytics. Never preempts anyone.

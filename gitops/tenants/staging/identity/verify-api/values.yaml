@@ -1,0 +1,26 @@
+# Staging (EKS). Not synced by the lab cluster; shown here to illustrate
+# promotion: CI opens a PR that bumps image.tag, and merging it deploys.
+team: identity
+environment: staging
+aws:
+  accountId: "222222222222"
+image:
+  repository: ghcr.io/sujitbhandari/verify-api
+  tag: "sha-0000000"
+size: medium
+rollout:
+  strategy: canary
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  UPSTREAM_POOL_SIZE: "4"
+secretEnvFrom: [verify-api-pseudonym-salt]
+autoscaling:
+  metric: inflight
+  minReplicas: 3
+  maxReplicas: 12
+scheduling:
+  priorityClassName: customer-facing
+slo:
+  availability: 99.95
+  latencyThreshold: "0.3"
+  latencyTarget: 99

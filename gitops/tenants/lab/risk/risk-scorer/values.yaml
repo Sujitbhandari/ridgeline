@@ -1,0 +1,22 @@
+team: risk
+environment: lab
+image:
+  repository: ridgeline/risk-scorer
+  tag: "0.1.0"
+size: small
+env:
+  MAX_ACTIVE_CONNECTIONS: "100"
+# The datastore behind risk-scorer has a hard connection ceiling, so this
+# service scales on CPU and stays small; callers must size their pools.
+autoscaling:
+  metric: cpu
+  minReplicas: 2
+  maxReplicas: 4
+rollout:
+  strategy: canary
+scheduling:
+  priorityClassName: customer-facing
+slo:
+  availability: 99.9
+  latencyThreshold: "0.1"
+  latencyTarget: 99

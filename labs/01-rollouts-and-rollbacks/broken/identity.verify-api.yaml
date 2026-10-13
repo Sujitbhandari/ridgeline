@@ -1,0 +1,3 @@
+# Someone ships a tag that was never pushed.
+image:
+  tag: "0.1.1-never-pushed"

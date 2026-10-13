@@ -1,0 +1,50 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: tenant-baseline
+  annotations:
+    policies.kyverno.io/title: Default-deny and guardrails for every tenant namespace
+    policies.kyverno.io/description: >-
+      Labeling a namespace ridgeline.dev/tenant=true is the only step a team
+      takes. Kyverno generates default-deny networking and a LimitRange, and
+      keeps them in sync, so no namespace ever starts wide open.
+spec:
+  generateExisting: true
+  rules:
+    - name: default-deny
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+              selector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      generate:
+        apiVersion: networking.k8s.io/v1
+        kind: NetworkPolicy
+        name: default-deny-all
+        namespace: "{{ request.object.metadata.name }}"
+        synchronize: true
+        data:
+          spec:
+            podSelector: {}
+            policyTypes: [Ingress, Egress]
+    - name: limit-range
+      match:
+        any:
+          - resources:
+              kinds: [Namespace]
+              selector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      generate:
+        apiVersion: v1
+        kind: LimitRange
+        name: tenant-defaults
+        namespace: "{{ request.object.metadata.name }}"
+        synchronize: true
+        data:
+          spec:
+            limits:
+              - type: Container
+                defaultRequest: { cpu: 100m, memory: 128Mi }
+                default: { memory: 256Mi }
+                max: { memory: 4Gi }

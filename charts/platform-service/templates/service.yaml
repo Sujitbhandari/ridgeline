@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ps.name" . }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ps.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "ps.name" . }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+  {{- if .Values.aws.accountId }}
+  annotations:
+    # IRSA: pods get short-lived AWS credentials for this role only. The role
+    # is created by infra/terraform; its permissions come from AccessRequests.
+    eks.amazonaws.com/role-arn: {{ include "ps.irsaRoleArn" . }}
+  {{- end }}
+automountServiceAccountToken: false
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "ps.name" . }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.disruptionBudget.maxUnavailable }}
+  # Don't let a crash-looping pod block node drains forever.
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      {{- include "ps.selectorLabels" . | nindent 6 }}

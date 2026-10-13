@@ -1,0 +1,100 @@
+# Platform components, installed in dependency order by sync wave:
+#   -5 CRD-heavy operators and admission (kyverno, prometheus operator)
+#   -3 scaling, delivery, networking
+#   -1 telemetry pipeline
+#    0 tenant baseline (namespaces, policies) then tenant apps
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - { name: kyverno,               ns: kyverno,        repo: https://kyverno.github.io/kyverno/,                       chart: kyverno,                 version: 3.3.4,   wave: "-5" }
+          - { name: kube-prometheus-stack, ns: observability,  repo: https://prometheus-community.github.io/helm-charts,       chart: kube-prometheus-stack,   version: 69.8.2,  wave: "-5" }
+          - { name: metrics-server,        ns: kube-system,    repo: https://kubernetes-sigs.github.io/metrics-server/,        chart: metrics-server,          version: 3.12.2,  wave: "-3" }
+          - { name: keda,                  ns: keda,           repo: https://kedacore.github.io/charts,                        chart: keda,                    version: 2.16.1,  wave: "-3" }
+          - { name: argo-rollouts,         ns: argo-rollouts,  repo: https://argoproj.github.io/argo-helm,                     chart: argo-rollouts,           version: 2.38.2,  wave: "-3" }
+          - { name: loki,                  ns: observability,  repo: https://grafana.github.io/helm-charts,                    chart: loki,                    version: 6.24.0,  wave: "-1" }
+          - { name: opentelemetry-collector, ns: observability, repo: https://open-telemetry.github.io/opentelemetry-helm-charts, chart: opentelemetry-collector, version: 0.111.0, wave: "-1" }
+  template:
+    metadata:
+      name: "{{ .name }}"
+      annotations: { argocd.argoproj.io/sync-wave: "{{ .wave }}" }
+    spec:
+      project: platform
+      sources:
+        - repoURL: "{{ .repo }}"
+          chart: "{{ .chart }}"
+          targetRevision: "{{ .version }}"
+          helm:
+            releaseName: "{{ .name }}"
+            valueFiles: ["$values/gitops/platform/{{ .name }}/values.yaml"]
+        - repoURL: https://github.com/Sujitbhandari/ridgeline.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .ns }}"
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+        syncOptions: [CreateNamespace=true, ServerSideApply=true]
+        retry:
+          limit: 5
+          backoff: { duration: 10s, factor: 2, maxDuration: 3m }
+---
+# Plain manifests from this repo. Namespaces and PriorityClasses go first
+# (operators reference the priority classes); the rest needs CRDs from wave -5.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: baseline-early
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-6" }
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Sujitbhandari/ridgeline.git
+    targetRevision: main
+    path: gitops/platform/baseline/early
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: baseline-observability
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Sujitbhandari/ridgeline.git
+    targetRevision: main
+    path: gitops/platform/baseline/observability
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: policies
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "0" }
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Sujitbhandari/ridgeline.git
+    targetRevision: main
+    path: policies/kyverno
+    directory: { exclude: "tests/*" }
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

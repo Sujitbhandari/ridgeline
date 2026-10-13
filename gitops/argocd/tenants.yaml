@@ -1,0 +1,61 @@
+# Every directory gitops/tenants/<env>/<namespace>/<service>/ becomes one
+# Argo CD Application of the golden-path chart. Onboarding a service is a PR
+# that adds one values.yaml. Promotion is a PR that bumps image.tag.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenants
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  # Lets scripts/lab.sh pause auto-sync on one app during a lab without the
+  # ApplicationSet controller immediately turning it back on.
+  ignoreApplicationDifferences:
+    - jsonPointers: [/spec/syncPolicy]
+  generators:
+    - git:
+        repoURL: https://github.com/Sujitbhandari/ridgeline.git
+        revision: main
+        directories:
+          - path: gitops/tenants/lab/*/*
+  template:
+    metadata:
+      name: "{{ index .path.segments 3 }}-{{ .path.basename }}-lab"
+      labels: { ridgeline.dev/appset: tenants }
+      annotations: { argocd.argoproj.io/sync-wave: "5" }
+    spec:
+      project: tenants
+      source:
+        repoURL: https://github.com/Sujitbhandari/ridgeline.git
+        targetRevision: main
+        path: charts/platform-service
+        helm:
+          releaseName: "{{ .path.basename }}"
+          valueFiles: ["../../{{ .path.path }}/values.yaml"]
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ index .path.segments 3 }}"
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+      # HPA/KEDA own the replica count; don't fight them.
+      ignoreDifferences:
+        - { group: apps, kind: Deployment, jsonPointers: [/spec/replicas] }
+        - { group: argoproj.io, kind: Rollout, jsonPointers: [/spec/replicas] }
+---
+# Network grants rendered by accessctl from merged AccessRequests.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: access-grants-lab
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "4" }
+spec:
+  project: tenants
+  source:
+    repoURL: https://github.com/Sujitbhandari/ridgeline.git
+    targetRevision: main
+    path: access-requests/rendered/lab/network
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

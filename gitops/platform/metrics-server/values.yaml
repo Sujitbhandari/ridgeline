@@ -1,0 +1,2 @@
+# kind's kubelets use self-signed serving certs. Never do this on EKS.
+args: [--kubelet-insecure-tls]

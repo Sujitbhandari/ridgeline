@@ -1,0 +1,9 @@
+team: data
+image: { repository: ridgeline/etl, tag: "1.2.3" }
+size: custom
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { memory: 128Mi }
+autoscaling: { enabled: false }
+replicas: 2
+scheduling: { spreadAcrossZones: false, priorityClassName: batch-low }

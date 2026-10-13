@@ -1,0 +1,12 @@
+# Part B: try to deploy this. Admission control should refuse it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: noisy-neighbor
+  namespace: identity
+  labels: { ridgeline.dev/lab: "06" }
+spec:
+  containers:
+    - name: burn
+      image: busybox:1.37
+      command: ["sh", "-c", "while true; do :; done"]

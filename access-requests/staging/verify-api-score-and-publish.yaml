@@ -1,0 +1,17 @@
+apiVersion: ridgeline.dev/v1alpha1
+kind: AccessRequest
+metadata:
+  name: verify-api-score-and-publish
+spec:
+  requester: dev@example.com
+  ticket: PLAT-142
+  environment: staging
+  subject: identity/verify-api
+  expires: "2026-11-06"
+  justification: >
+    verify-api needs to call risk-scorer for every verification and publish a
+    completion event so analytics can count outcomes without reading PII.
+  grants:
+    - resource: svc/risk-scorer
+    - resource: sqs/verification-events
+      actions: [sqs:SendMessage, sqs:GetQueueAttributes]

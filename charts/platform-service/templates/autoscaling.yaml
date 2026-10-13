@@ -1,0 +1,73 @@
+{{- if .Values.autoscaling.enabled }}
+{{- $name := include "ps.name" . -}}
+{{- $kind := ternary "Rollout" "Deployment" (eq .Values.rollout.strategy "canary") -}}
+{{- $api := ternary "argoproj.io/v1alpha1" "apps/v1" (eq .Values.rollout.strategy "canary") -}}
+{{- if eq .Values.autoscaling.metric "inflight" }}
+# KEDA creates and owns the HPA. Scaling signal: average in-flight requests
+# per pod, a direct measure of concurrency that stays meaningful for
+# I/O-bound services whose CPU barely moves under load.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: {{ $api }}
+    kind: {{ $kind }}
+    name: {{ $name }}
+  minReplicaCount: {{ .Values.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.autoscaling.maxReplicas }}
+  pollingInterval: 15
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - { type: Percent, value: 100, periodSeconds: 30 }
+        scaleDown:
+          # Scale down slowly: flapping replicas cost more than idle pods.
+          stabilizationWindowSeconds: 300
+          policies:
+            - { type: Percent, value: 20, periodSeconds: 60 }
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://kube-prometheus-stack-prometheus.observability.svc:9090
+        query: sum(http_inflight_requests{service="{{ $name }}", namespace="{{ .Release.Namespace }}"})
+        threshold: {{ .Values.autoscaling.targetInflightPerPod | quote }}
+    # Floor: CPU still protects us if the Prometheus query ever stops returning.
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "85"
+{{- else }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "ps.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: {{ $api }}
+    kind: {{ $kind }}
+    name: {{ $name }}
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.autoscaling.targetCPUUtilization }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+{{- end }}
+{{- end }}

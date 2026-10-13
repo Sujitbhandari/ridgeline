@@ -1,0 +1,65 @@
+# A pod shaped exactly like the platform-service chart renders it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: golden-path
+  namespace: identity
+  labels: { app.kubernetes.io/name: verify-api, ridgeline.dev/team: identity }
+spec:
+  automountServiceAccountToken: false
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    seccompProfile: { type: RuntimeDefault }
+  containers:
+    - name: app
+      image: ghcr.io/sujitbhandari/verify-api:sha-3f9c2e1
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { memory: 256Mi }
+      readinessProbe: { httpGet: { path: /readyz, port: 8080 }, periodSeconds: 5 }
+      livenessProbe: { httpGet: { path: /healthz, port: 8080 }, periodSeconds: 10 }
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities: { drop: [ALL] }
+---
+# The "it works on my laptop" pod: latest tag, root, no probes, no limits.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cowboy
+  namespace: identity
+spec:
+  containers:
+    - name: app
+      image: docker.io/someone/app:latest
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: untagged
+  namespace: identity
+spec:
+  securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+  containers:
+    - name: app
+      image: ghcr.io/sujitbhandari/verify-api
+      resources:
+        requests: { cpu: 100m, memory: 128Mi }
+        limits: { memory: 256Mi }
+      securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unowned
+  namespace: identity
+spec:
+  selector: { matchLabels: { app: x } }
+  template:
+    metadata: { labels: { app: x } }
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/sujitbhandari/x:1.0.0

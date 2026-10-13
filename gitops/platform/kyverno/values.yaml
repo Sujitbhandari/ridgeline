@@ -1,0 +1,14 @@
+admissionController:
+  replicas: 1          # 3 in production; admission is on every write path
+  priorityClassName: platform-critical
+backgroundController: { replicas: 1 }
+cleanupController: { replicas: 1 }
+reportsController: { replicas: 1 }
+config:
+  # Never let a policy outage lock us out of fixing the cluster.
+  webhooks:
+    - namespaceSelector:
+        matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values: [kube-system, kyverno, argocd]

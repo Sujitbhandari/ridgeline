@@ -1,0 +1,32 @@
+# Runs k6 inside the cluster so load spreads across every verify-api pod
+# through the Service (a port-forward pins all traffic to a single pod).
+#   make load RPS=200 DURATION=5m
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6
+  namespace: loadtest
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: k6 }
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: k6
+          image: grafana/k6:0.57.0
+          args: [run, /scripts/verify.js]
+          env:
+            - { name: BASE_URL, value: "http://verify-api.identity.svc:8080" }
+            - { name: RPS, value: "100" }
+            - { name: DURATION, value: "5m" }
+          resources:
+            requests: { cpu: 500m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: scripts, mountPath: /scripts }
+      volumes:
+        - name: scripts
+          configMap: { name: k6-scripts }

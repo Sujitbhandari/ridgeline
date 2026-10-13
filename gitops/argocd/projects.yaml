@@ -1,0 +1,52 @@
+# Two trust levels. The platform project may install cluster-scoped things
+# (CRDs, ClusterPolicies, namespaces). Tenant apps may only create namespaced
+# workload objects in tenant namespaces, so a team's values file can never
+# grant itself a ClusterRole or disable a policy.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-10" }
+spec:
+  description: Platform components owned by @ridgeline/platform
+  sourceRepos: ["*"]
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: "*" }
+  clusterResourceWhitelist:
+    - { group: "*", kind: "*" }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: tenants
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-10" }
+spec:
+  description: Product team services deployed through the golden path
+  sourceRepos: [https://github.com/Sujitbhandari/ridgeline.git]
+  destinations:
+    - { server: https://kubernetes.default.svc, namespace: identity }
+    - { server: https://kubernetes.default.svc, namespace: risk }
+    - { server: https://kubernetes.default.svc, namespace: data }
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - { group: "", kind: Service }
+    - { group: "", kind: ServiceAccount }
+    - { group: "", kind: ConfigMap }
+    - { group: apps, kind: Deployment }
+    - { group: argoproj.io, kind: Rollout }
+    - { group: argoproj.io, kind: AnalysisTemplate }
+    - { group: policy, kind: PodDisruptionBudget }
+    - { group: autoscaling, kind: HorizontalPodAutoscaler }
+    - { group: keda.sh, kind: ScaledObject }
+    - { group: networking.k8s.io, kind: NetworkPolicy }
+    - { group: monitoring.coreos.com, kind: ServiceMonitor }
+    - { group: monitoring.coreos.com, kind: PrometheusRule }
+  # Deploys are allowed any time except a weekend change freeze in prod-like envs.
+  syncWindows:
+    - kind: deny
+      schedule: "0 22 * * 5"
+      duration: 56h
+      applications: ["*-prod"]
+      manualSync: true

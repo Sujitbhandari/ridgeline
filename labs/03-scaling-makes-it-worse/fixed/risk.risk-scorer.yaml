@@ -1,0 +1,9 @@
+# A slow datastore with a hard connection ceiling (think Postgres
+# max_connections on a small instance). The ceiling is enforced per
+# risk-scorer pod, so it's pinned at 2 pods x 30 = 60 connections total.
+env:
+  MAX_ACTIVE_CONNECTIONS: "30"
+  CHAOS_LATENCY_MS: "80"
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 2

@@ -1,0 +1,8 @@
+# The platform defaults: hard zone spread, soft node spread, no pinning.
+scheduling:
+  spreadAcrossZones: true
+  spreadAcrossNodes: true
+  nodeSelector: {}
+autoscaling:
+  minReplicas: 4
+  maxReplicas: 4

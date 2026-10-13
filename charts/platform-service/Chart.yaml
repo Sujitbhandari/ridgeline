@@ -1,0 +1,12 @@
+apiVersion: v2
+name: platform-service
+description: >
+  The Ridgeline golden path. One opinionated chart every HTTP service deploys
+  with: resource presets, probes, graceful shutdown, zone spreading, default-deny
+  networking, IRSA, metrics, traces, SLO alerts and progressive delivery.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Sujit Bhandari
+    url: https://github.com/Sujitbhandari

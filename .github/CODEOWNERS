@@ -1,0 +1,15 @@
+# Default: the platform team reviews everything.
+*                                   @ridgeline/platform
+
+# Teams own their service configuration.
+/gitops/tenants/*/identity/         @ridgeline/identity
+/gitops/tenants/*/risk/             @ridgeline/risk
+/gitops/tenants/*/data/             @ridgeline/data
+
+# The access menu and guardrails need security review.
+/access-requests/catalog.yaml       @ridgeline/platform @ridgeline/security
+/policies/                          @ridgeline/platform @ridgeline/security
+
+# Access requests: platform reviews every one. `accessctl explain` lists any
+# additional owning teams, and the PR check comment tags them.
+/access-requests/                   @ridgeline/platform

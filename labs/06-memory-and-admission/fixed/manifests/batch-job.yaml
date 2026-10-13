@@ -1,0 +1,36 @@
+# The same CPU-hungry work, done the platform way: requests set, low priority,
+# never preempts customer-facing pods, and the kernel gives it CPU only when
+# nobody with a bigger request needs it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: batch-burn
+  namespace: data
+  labels: { ridgeline.dev/lab: "06" }
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels: { ridgeline.dev/lab: "06", app.kubernetes.io/name: batch-burn }
+    spec:
+      restartPolicy: Never
+      priorityClassName: batch-low
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: burn
+          # Reuses the lab image (already in the cluster, trusted registry).
+          image: ridgeline/verify-api:0.1.0
+          command: ["python", "-c", "import time\nend = time.time() + 300\nwhile time.time() < end: pass"]
+          resources:
+            requests: { cpu: 100m, memory: 32Mi }
+            limits: { memory: 64Mi }
+          readinessProbe: { exec: { command: ["true"] }, periodSeconds: 10 }
+          livenessProbe: { exec: { command: ["true"] }, periodSeconds: 10 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }

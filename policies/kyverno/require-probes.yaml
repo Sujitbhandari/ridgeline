@@ -1,0 +1,27 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-probes
+  annotations:
+    policies.kyverno.io/title: Require readiness and liveness probes
+    policies.kyverno.io/description: >-
+      Without a readiness probe, a pod receives traffic before it can serve it
+      and keeps receiving it while it drains. Rollouts become guesswork.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: readiness-and-liveness
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      validate:
+        message: "Containers in tenant namespaces need readinessProbe and livenessProbe."
+        pattern:
+          spec:
+            containers:
+              - readinessProbe: { periodSeconds: ">0" }
+                livenessProbe: { periodSeconds: ">0" }

@@ -1,0 +1,61 @@
+fullnameOverride: kube-prometheus-stack
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    # Pick up ServiceMonitors/PrometheusRules from every namespace, not only
+    # ones labeled for this Helm release, so the golden-path chart just works.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    enableFeatures: [exemplar-storage]
+    resources:
+      requests: { cpu: 200m, memory: 1Gi }
+      limits: { memory: 2Gi }
+    priorityClassName: platform-critical
+kube-state-metrics:
+  metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/name,ridgeline.dev/team]
+    - nodes=[topology.kubernetes.io/zone]
+alertmanager:
+  config:
+    route:
+      receiver: "null"
+      group_by: [alertname, service, namespace]
+      routes:
+        - matchers: ['severity="page"']
+          receiver: oncall-page
+          group_wait: 30s
+          repeat_interval: 1h
+        - matchers: ['severity="ticket"']
+          receiver: team-ticket
+          repeat_interval: 24h
+    receivers:
+      - name: "null"
+      # Wire these to PagerDuty / Slack in a real environment.
+      - name: oncall-page
+      - name: team-ticket
+grafana:
+  adminPassword: ridgeline-lab   # lab only; prod uses SSO
+  sidecar:
+    dashboards: { enabled: true, label: grafana_dashboard, searchNamespace: ALL }
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki-gateway.observability.svc
+      jsonData:
+        derivedFields:
+          - name: trace_id
+            matcherRegex: '"trace_id":"(\w+)"'
+            url: "$${__value.raw}"
+            datasourceUid: jaeger
+    - name: Jaeger
+      type: jaeger
+      uid: jaeger
+      url: http://jaeger.observability.svc:16686
+      jsonData:
+        tracesToLogsV2:
+          datasourceUid: loki
+          filterByTraceID: true
+          customQuery: true
+          query: '{service_name="$${__span.tags["service.name"]}"} |= "$${__trace.traceId}"'

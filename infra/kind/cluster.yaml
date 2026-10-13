@@ -1,0 +1,24 @@
+# Local lab cluster: 1 control plane + 3 workers, each labeled as a different
+# "availability zone" so topology spreading, zone failure and drain behavior
+# work like they do across AZs on EKS.
+#
+# kindnet does not enforce NetworkPolicy, so the default CNI is disabled and
+# scripts/lab-up.sh installs Calico. Default-deny is only real if it's enforced.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ridgeline
+networking:
+  disableDefaultCNI: true
+  podSubnet: 192.168.0.0/16
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.32.2
+  - role: worker
+    image: kindest/node:v1.32.2
+    labels: { topology.kubernetes.io/zone: lab-a }
+  - role: worker
+    image: kindest/node:v1.32.2
+    labels: { topology.kubernetes.io/zone: lab-b }
+  - role: worker
+    image: kindest/node:v1.32.2
+    labels: { topology.kubernetes.io/zone: lab-c }

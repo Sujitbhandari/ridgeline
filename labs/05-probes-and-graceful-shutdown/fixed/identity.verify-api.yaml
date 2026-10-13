@@ -1,0 +1,7 @@
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  CHAOS_STARTUP_DELAY_S: "45"
+probes:
+  startupTimeoutSeconds: 90
+shutdown:
+  preStopSleepSeconds: 5

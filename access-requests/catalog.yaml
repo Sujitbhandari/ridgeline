@@ -1,0 +1,91 @@
+# The platform's access menu. Owned by @ridgeline/platform (see CODEOWNERS).
+#
+# Developers never write IAM or NetworkPolicy by hand. They reference a
+# resource id from this file in an AccessRequest, and accessctl renders the
+# least-privilege policy. Adding a new grantable resource is a reviewed
+# change to this file, made once, instead of a one-off ticket every time.
+
+environments:
+  lab:           # local kind cluster; no AWS account behind it
+    account_id: "000000000000"
+    region: us-east-1
+    max_days: 90
+    approvals_required: 1
+    production: false
+  dev:
+    account_id: "111111111111"
+    region: us-east-1
+    max_days: 90
+    approvals_required: 1
+    production: false
+  staging:
+    account_id: "222222222222"
+    region: us-east-1
+    max_days: 30
+    approvals_required: 1
+    production: false
+  prod:
+    account_id: "333333333333"
+    region: us-east-1
+    max_days: 14
+    approvals_required: 2
+    production: true
+
+teams:
+  platform: { reviewers: "@ridgeline/platform" }
+  identity: { reviewers: "@ridgeline/identity" }
+  risk:     { reviewers: "@ridgeline/risk" }
+  data:     { reviewers: "@ridgeline/data" }
+
+# Workloads = Kubernetes ServiceAccounts with an IRSA role named
+# <env>-<namespace>-<name> (created by infra/terraform).
+workloads:
+  - { namespace: identity, name: verify-api,    team: identity }
+  - { namespace: risk,     name: risk-scorer,   team: risk }
+  - { namespace: data,     name: analytics-etl, team: data }
+
+resources:
+  - id: svc/risk-scorer
+    kind: service
+    owner: risk
+    classification: internal
+    namespace: risk
+    app: risk-scorer
+    port: 8080
+
+  - id: dynamodb/risk-signals
+    kind: aws
+    owner: risk
+    classification: confidential
+    arn:
+      - "arn:aws:dynamodb:{region}:{account}:table/{env}-risk-signals"
+      - "arn:aws:dynamodb:{region}:{account}:table/{env}-risk-signals/index/*"
+    allowed_actions: [dynamodb:GetItem, dynamodb:Query, dynamodb:BatchGetItem, dynamodb:PutItem]
+
+  - id: sqs/verification-events
+    kind: aws
+    owner: identity
+    classification: internal
+    arn: ["arn:aws:sqs:{region}:{account}:{env}-verification-events"]
+    allowed_actions: [sqs:SendMessage, sqs:ReceiveMessage, sqs:DeleteMessage, sqs:GetQueueAttributes]
+
+  - id: s3/verification-records
+    kind: aws
+    owner: identity
+    classification: pii
+    arn: ["arn:aws:s3:::{env}-verification-records/*"]
+    allowed_actions: [s3:GetObject, s3:PutObject]
+
+  - id: kms/pii-data-key
+    kind: aws
+    owner: platform
+    classification: pii
+    arn: ["arn:aws:kms:{region}:{account}:alias/{env}-pii-data"]
+    allowed_actions: [kms:Decrypt, kms:GenerateDataKey]
+
+  - id: external/carrier-gateway
+    kind: external
+    owner: platform
+    classification: internal
+    cidr: 203.0.113.0/24   # TEST-NET-3 placeholder for a telecom carrier API
+    port: 443

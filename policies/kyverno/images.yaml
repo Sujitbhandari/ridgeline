@@ -1,0 +1,63 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: image-provenance
+  annotations:
+    policies.kyverno.io/title: Immutable tags from trusted registries
+    policies.kyverno.io/description: >-
+      A moving tag means the thing you rolled back to is not the thing that
+      was running. Images must come from our registry with an immutable tag;
+      in production they must also carry a cosign signature from our CI.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  webhookTimeoutSeconds: 15
+  rules:
+    - name: trusted-registry
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
+      validate:
+        message: "Images must come from ghcr.io/sujitbhandari/ (or ridgeline/ for local kind labs)."
+        pattern:
+          spec:
+            containers:
+              - image: "ghcr.io/sujitbhandari/* | ridgeline/*"
+    - name: no-mutable-tags
+      match:
+        any:
+          - resources: { kinds: [Pod] }
+      validate:
+        message: "Use an immutable tag or digest, not :latest or an untagged image."
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ contains(element.image, ':') || contains(element.image, '@') }}"
+                    operator: Equals
+                    value: false
+    - name: signed-in-production
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/environment: prod }
+      verifyImages:
+        - imageReferences: ["ghcr.io/sujitbhandari/*"]
+          mutateDigest: true
+          verifyDigest: true
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/Sujitbhandari/ridgeline/.github/workflows/ci.yaml@refs/heads/main"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev

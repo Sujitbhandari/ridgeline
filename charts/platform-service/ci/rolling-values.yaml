@@ -1,0 +1,5 @@
+team: identity
+image: { repository: ridgeline/verify-api, tag: "0.1.0" }
+env: { RISK_SCORER_URL: "http://risk-scorer.risk:8080" }
+network:
+  public: true

@@ -1,0 +1,15 @@
+apiVersion: ridgeline.dev/v1alpha1
+kind: AccessRequest
+metadata:
+  name: verify-api-to-risk-scorer
+spec:
+  requester: dev@example.com
+  ticket: PLAT-101
+  environment: lab
+  subject: identity/verify-api
+  expires: "2026-12-31"
+  justification: >
+    verify-api calls risk-scorer synchronously on every verification. Without
+    this path the default-deny baseline drops the connection (see labs/07).
+  grants:
+    - resource: svc/risk-scorer

@@ -1,0 +1,8 @@
+# Same work per request. Request what the pod actually uses, drop the CPU limit.
+cpuLimit: ""
+size: medium
+env:
+  CHAOS_CPU_BURN_MS: "15"
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 3

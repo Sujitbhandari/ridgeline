@@ -1,0 +1,9 @@
+# Part A: a release that now takes 45s to warm up, with a 10s startup budget.
+# Part B: no preStop pause before SIGTERM.
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  CHAOS_STARTUP_DELAY_S: "45"
+probes:
+  startupTimeoutSeconds: 10
+shutdown:
+  preStopSleepSeconds: 0

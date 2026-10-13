@@ -1,0 +1,24 @@
+{
+  "resource": {
+    "aws_iam_policy": {
+      "verify_api_score_and_publish": {
+        "description": "PLAT-142: verify-api needs to call risk-scorer for every verification and publish a completion event so analytics can count outcomes without reading PII.",
+        "name": "access-staging-verify-api-score-and-publish",
+        "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Sid\":\"SqsVerificationEvents\",\"Effect\":\"Allow\",\"Action\":[\"sqs:GetQueueAttributes\",\"sqs:SendMessage\"],\"Resource\":[\"arn:aws:sqs:us-east-1:222222222222:staging-verification-events\"]}]}",
+        "tags": {
+          "expires": "2026-11-06",
+          "request": "verify-api-score-and-publish",
+          "request-hash": "175fe64a1f56272e",
+          "requester": "dev@example.com",
+          "ticket": "PLAT-142"
+        }
+      }
+    },
+    "aws_iam_role_policy_attachment": {
+      "verify_api_score_and_publish": {
+        "policy_arn": "${aws_iam_policy.verify_api_score_and_publish.arn}",
+        "role": "staging-identity-verify-api"
+      }
+    }
+  }
+}

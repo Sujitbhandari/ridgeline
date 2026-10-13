@@ -1,0 +1,43 @@
+name: access-expiry
+# Nightly: expired grants are removed by a PR, so the removal is reviewed,
+# logged in git, and applied by the same pipeline that granted them.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: tools/accessctl/go.mod }
+      - name: Remove expired requests and re-render
+        id: expire
+        run: |
+          expired=$(go run ./tools/accessctl expired access-requests)
+          soon=$(go run ./tools/accessctl expired -within 7 access-requests | grep -vxF "$expired" || true)
+          echo "$expired" | xargs -r git rm -q
+          rm -rf access-requests/rendered && go run ./tools/accessctl render access-requests || true
+          {
+            echo "body<<EOF"
+            echo "Removing expired access grants:"
+            while read -r f; do [ -n "$f" ] && echo "- $f"; done <<< "$expired"
+            if [ -n "$soon" ]; then
+              echo; echo "Expiring within 7 days (renew with a PR if still needed):"
+              while read -r f; do echo "- $f"; done <<< "$soon"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: access/expire
+          title: "Remove expired access grants"
+          body: ${{ steps.expire.outputs.body }}
+          commit-message: "access: remove expired grants"
+          labels: access-expiry

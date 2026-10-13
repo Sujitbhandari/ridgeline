@@ -1,0 +1,69 @@
+# One collector per node. Apps send OTLP to $(HOST_IP):4317, so spans are
+# batched locally and enriched with pod/node/namespace metadata before they
+# leave the node. This is also the last line of defense for PII.
+mode: daemonset
+image:
+  repository: otel/opentelemetry-collector-contrib
+priorityClassName: platform-critical
+presets:
+  kubernetesAttributes: { enabled: true }
+  logsCollection: { enabled: true, includeCollectorLogs: false }
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    hostPort: 4317
+    protocol: TCP
+  otlp-http: { enabled: false }
+  jaeger-compact: { enabled: false }
+  jaeger-thrift: { enabled: false }
+  jaeger-grpc: { enabled: false }
+  zipkin: { enabled: false }
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits: { memory: 512Mi }
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc: { endpoint: "0.0.0.0:4317" }
+  processors:
+    memory_limiter: { check_interval: 1s, limit_percentage: 80, spike_limit_percentage: 20 }
+    batch: { send_batch_size: 1024, timeout: 5s }
+    # Defense in depth: even if a developer puts a phone number in a span
+    # attribute or log body, it is masked before export.
+    transform/redact-pii:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'replace_all_patterns(attributes, "value", "\\(?\\d{3}\\)?[ .-]?\\d{3}[ .-]?\\d{4}", "[REDACTED:phone]")'
+      log_statements:
+        - context: log
+          statements:
+            - 'replace_pattern(body, "\\(?\\d{3}\\)?[ .-]?\\d{3}[ .-]?\\d{4}", "[REDACTED:phone]")'
+    # Keep every error and every slow trace; sample 10% of the healthy rest.
+    tail_sampling:
+      decision_wait: 10s
+      policies:
+        - { name: errors, type: status_code, status_code: { status_codes: [ERROR] } }
+        - { name: slow, type: latency, latency: { threshold_ms: 300 } }
+        - { name: baseline, type: probabilistic, probabilistic: { sampling_percentage: 10 } }
+  exporters:
+    otlp/jaeger:
+      endpoint: jaeger.observability.svc:4317
+      tls: { insecure: true }
+    otlphttp/loki:
+      endpoint: http://loki-gateway.observability.svc/otlp
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, transform/redact-pii, tail_sampling, batch]
+        exporters: [otlp/jaeger]
+      logs:
+        receivers: [filelog]
+        processors: [memory_limiter, k8sattributes, transform/redact-pii, batch]
+        exporters: [otlphttp/loki]
+      metrics: null

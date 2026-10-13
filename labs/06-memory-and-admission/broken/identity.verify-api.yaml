@@ -1,0 +1,4 @@
+# Every request leaks 64KB. At 100 rps per pod that's ~6MB/s against a 256Mi limit.
+env:
+  RISK_SCORER_URL: http://risk-scorer.risk.svc:8080
+  CHAOS_LEAK_KB_PER_REQ: "64"

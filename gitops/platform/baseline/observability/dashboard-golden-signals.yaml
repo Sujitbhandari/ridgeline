@@ -1,0 +1,57 @@
+# Provisioned into Grafana by the dashboard sidecar. One dashboard, every service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-golden-signals
+  namespace: observability
+  labels:
+    grafana_dashboard: '1'
+data:
+  golden-signals.json: "{\n \"title\": \"Ridgeline / Service golden signals\",\n \"uid\": \"ridgeline-golden\",\n \"schemaVersion\": 39,\n \"time\": {\n  \"from\": \"now-1h\",\n  \"to\": \"now\"\n },\n\
+    \ \"refresh\": \"10s\",\n \"tags\": [\n  \"ridgeline\",\n  \"slo\"\n ],\n \"templating\": {\n  \"list\": [\n   {\n    \"name\": \"namespace\",\n    \"type\": \"query\",\n    \"datasource\": {\n    \
+    \ \"type\": \"prometheus\",\n     \"uid\": \"prometheus\"\n    },\n    \"query\": \"label_values(http_requests_total, namespace)\",\n    \"refresh\": 2\n   },\n   {\n    \"name\": \"service\",\n   \
+    \ \"type\": \"query\",\n    \"datasource\": {\n     \"type\": \"prometheus\",\n     \"uid\": \"prometheus\"\n    },\n    \"query\": \"label_values(http_requests_total{namespace=\\\"$namespace\\\"},\
+    \ service)\",\n    \"refresh\": 2\n   },\n   {\n    \"name\": \"slo\",\n    \"type\": \"custom\",\n    \"query\": \"99.9,99.95,99.99,99.999\",\n    \"current\": {\n     \"text\": \"99.9\",\n     \"\
+    value\": \"99.9\"\n    }\n   }\n  ]\n },\n \"panels\": [\n  {\n   \"type\": \"stat\",\n   \"title\": \"Availability (30d)\",\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"w\": 6,\n    \"h\"\
+    : 4\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"percentunit\",\n     \"decimals\": 3\n\
+    \    }\n   },\n   \"targets\": [\n    {\n     \"expr\": \"1 - (sum(increase(http_requests_total{service=\\\"$service\\\",code=~\\\"5..\\\"}[30d])) / sum(increase(http_requests_total{service=\\\"$service\\\
+    \"}[30d])))\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Error budget burn rate (1h)\",\n   \"gridPos\": {\n    \"x\": 6,\n    \"y\": 0,\n    \"w\": 6,\n\
+    \    \"h\": 4\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"x\",\n     \"decimals\": 3\n\
+    \    }\n   },\n   \"targets\": [\n    {\n     \"expr\": \"slo:error_ratio:rate1h{service=\\\"$service\\\"} / (1 - $slo/100)\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"stat\",\n\
+    \   \"title\": \"Ready replicas\",\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 0,\n    \"w\": 6,\n    \"h\": 4\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\
+    \n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"none\",\n     \"decimals\": 3\n    }\n   },\n   \"targets\": [\n    {\n     \"expr\": \"count(up{service=\\\"$service\\\"} == 1)\"\
+    ,\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"p99 latency (5m)\",\n   \"gridPos\": {\n    \"x\": 18,\n    \"y\": 0,\n    \"w\": 6,\n    \"h\": 4\n   },\n\
+    \   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\",\n     \"decimals\": 3\n    }\n   },\n   \"\
+    targets\": [\n    {\n     \"expr\": \"histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service=\\\"$service\\\"}[5m])))\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n\
+    \  {\n   \"type\": \"timeseries\",\n   \"title\": \"Traffic by status\",\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 4,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"\
+    prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\"\
+    : \"sum by (code) (rate(http_requests_total{service=\\\"$service\\\"}[1m]))\",\n     \"legendFormat\": \"{{code}}\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\",\n  \
+    \ \"title\": \"Error ratio vs SLO budget\",\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 4,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\":\
+    \ \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"percentunit\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"slo:error_ratio:rate5m{service=\\\
+    \"$service\\\"}\",\n     \"legendFormat\": \"5m error ratio\",\n     \"refId\": \"A\"\n    },\n    {\n     \"expr\": \"slo:error_ratio:rate1h{service=\\\"$service\\\"}\",\n     \"legendFormat\": \"\
+    1h error ratio\",\n     \"refId\": \"B\"\n    },\n    {\n     \"expr\": \"1 - $slo/100\",\n     \"legendFormat\": \"budget (1x burn)\",\n     \"refId\": \"C\"\n    }\n   ]\n  },\n  {\n   \"type\": \"\
+    timeseries\",\n   \"title\": \"Latency percentiles\",\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 12,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n  \
+    \  \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"histogram_quantile(0.5,\
+    \ sum by (le) (rate(http_request_duration_seconds_bucket{service=\\\"$service\\\"}[1m])))\",\n     \"legendFormat\": \"p50\",\n     \"refId\": \"A\"\n    },\n    {\n     \"expr\": \"histogram_quantile(0.95,\
+    \ sum by (le) (rate(http_request_duration_seconds_bucket{service=\\\"$service\\\"}[1m])))\",\n     \"legendFormat\": \"p95\",\n     \"refId\": \"B\"\n    },\n    {\n     \"expr\": \"histogram_quantile(0.99,\
+    \ sum by (le) (rate(http_request_duration_seconds_bucket{service=\\\"$service\\\"}[1m])))\",\n     \"legendFormat\": \"p99\",\n     \"refId\": \"C\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\"\
+    ,\n   \"title\": \"In-flight requests per pod (KEDA scaling signal)\",\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 12,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"\
+    prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"none\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\"\
+    : \"http_inflight_requests{service=\\\"$service\\\"}\",\n     \"legendFormat\": \"{{pod}}\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"CPU throttling\
+    \ by pod (labs/02)\",\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 20,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n\
+    \   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"percentunit\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"sum by (pod) (rate(container_cpu_cfs_throttled_periods_total{namespace=\\\
+    \"$namespace\\\",pod=~\\\"$service-.*\\\"}[1m])) / sum by (pod) (rate(container_cpu_cfs_periods_total{namespace=\\\"$namespace\\\",pod=~\\\"$service-.*\\\"}[1m]))\",\n     \"legendFormat\": \"{{pod}}\"\
+    ,\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Upstream pool and datastore connections (labs/03)\",\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 20,\n\
+    \    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"none\"\n \
+    \   },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"sum(upstream_pool_in_use{service=\\\"$service\\\"})\",\n     \"legendFormat\": \"pool in use (all pods)\",\n     \"refId\"\
+    : \"A\"\n    },\n    {\n     \"expr\": \"sum(upstream_pool_size{service=\\\"$service\\\"})\",\n     \"legendFormat\": \"pool capacity (all pods)\",\n     \"refId\": \"B\"\n    },\n    {\n     \"expr\"\
+    : \"max(datastore_max_connections)\",\n     \"legendFormat\": \"datastore ceiling\",\n     \"refId\": \"C\"\n    },\n    {\n     \"expr\": \"sum(datastore_active_connections)\",\n     \"legendFormat\"\
+    : \"datastore active\",\n     \"refId\": \"D\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Pods per zone (labs/04)\",\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 28,\n \
+    \   \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"none\"\n  \
+    \  },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"count by (zone) (kube_pod_info{namespace=\\\"$namespace\\\",pod=~\\\"$service-.*\\\"} * on (node) group_left(zone) label_replace(kube_node_labels,\
+    \ \\\"zone\\\", \\\"$1\\\", \\\"label_topology_kubernetes_io_zone\\\", \\\"(.+)\\\"))\",\n     \"legendFormat\": \"{{zone}}\",\n     \"refId\": \"A\"\n    }\n   ]\n  },\n  {\n   \"type\": \"timeseries\"\
+    ,\n   \"title\": \"Restarts and OOM kills (labs/05, 06)\",\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 28,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"datasource\": {\n    \"type\": \"prometheus\"\
+    ,\n    \"uid\": \"prometheus\"\n   },\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"none\"\n    },\n    \"overrides\": []\n   },\n   \"targets\": [\n    {\n     \"expr\": \"sum by (pod)\
+    \ (increase(kube_pod_container_status_restarts_total{namespace=\\\"$namespace\\\",pod=~\\\"$service-.*\\\"}[5m]))\",\n     \"legendFormat\": \"restarts {{pod}}\",\n     \"refId\": \"A\"\n    },\n  \
+    \  {\n     \"expr\": \"sum by (pod) (kube_pod_container_status_last_terminated_reason{namespace=\\\"$namespace\\\",pod=~\\\"$service-.*\\\",reason=\\\"OOMKilled\\\"})\",\n     \"legendFormat\": \"OOMKilled\
+    \ {{pod}}\",\n     \"refId\": \"B\"\n    }\n   ]\n  }\n ]\n}"

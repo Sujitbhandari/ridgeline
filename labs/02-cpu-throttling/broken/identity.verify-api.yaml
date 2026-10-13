@@ -1,0 +1,7 @@
+# A "safe-looking" CPU limit on a handler that needs ~15ms of CPU per request.
+cpuLimit: "200m"
+env:
+  CHAOS_CPU_BURN_MS: "15"
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 3
