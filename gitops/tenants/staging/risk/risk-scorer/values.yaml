@@ -1,0 +1,24 @@
+# Staging (EKS). Synced by gitops/staging/tenants.yaml, not by the lab cluster.
+team: risk
+environment: staging
+aws:
+  accountId: "222222222222"
+image:
+  repository: ghcr.io/sujitbhandari/risk-scorer
+  tag: "sha-0000000"
+size: medium
+env:
+  # 2 replicas x caller pools must stay under this ceiling. See lab 03.
+  MAX_ACTIVE_CONNECTIONS: "30"
+autoscaling:
+  metric: cpu
+  minReplicas: 2
+  maxReplicas: 4
+rollout:
+  strategy: canary
+scheduling:
+  priorityClassName: customer-facing
+slo:
+  availability: 99.95
+  latencyThreshold: "0.1"
+  latencyTarget: 99

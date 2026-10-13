@@ -1,0 +1,57 @@
+# Applied on the staging cluster's Argo CD, not by scripts/lab-up.sh.
+# The lab root app only reconciles gitops/argocd, so a promotion PR cannot
+# retarget the laptop onto ghcr.io images.
+#
+#   kubectl apply -f gitops/staging/tenants.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: tenants-staging
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/Sujitbhandari/ridgeline.git
+        revision: main
+        directories:
+          - path: gitops/tenants/staging/*/*
+  template:
+    metadata:
+      name: "{{ index .path.segments 3 }}-{{ .path.basename }}-staging"
+      labels: { ridgeline.dev/appset: tenants, ridgeline.dev/environment: staging }
+      annotations: { argocd.argoproj.io/sync-wave: "5" }
+    spec:
+      project: tenants
+      source:
+        repoURL: https://github.com/Sujitbhandari/ridgeline.git
+        targetRevision: main
+        path: charts/platform-service
+        helm:
+          releaseName: "{{ .path.basename }}"
+          valueFiles: ["../../{{ .path.path }}/values.yaml"]
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ index .path.segments 3 }}"
+      syncPolicy:
+        automated: { prune: true, selfHeal: true }
+      ignoreDifferences:
+        - { group: apps, kind: Deployment, jsonPointers: [/spec/replicas] }
+        - { group: argoproj.io, kind: Rollout, jsonPointers: [/spec/replicas] }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: access-grants-staging
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "4" }
+spec:
+  project: tenants
+  source:
+    repoURL: https://github.com/Sujitbhandari/ridgeline.git
+    targetRevision: main
+    path: access-requests/rendered/staging/network
+  destination: { server: https://kubernetes.default.svc }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

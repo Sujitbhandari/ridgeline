@@ -148,10 +148,17 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           tag="sha-${GITHUB_SHA::7}"
-          sed -i -E "s/^(  tag: ).*/\1\"$tag\"/" gitops/tenants/staging/identity/verify-api/values.yaml
+          for f in \
+            gitops/tenants/staging/identity/verify-api/values.yaml \
+            gitops/tenants/staging/risk/risk-scorer/values.yaml
+          do
+            sed -i -E "s/^(  tag: ).*/\1\"$tag\"/" "$f"
+          done
       - uses: peter-evans/create-pull-request@v7
         with:
-          branch: promote/staging-verify-api
-          title: "Promote verify-api ${{ github.sha }} to staging"
-          body: "Automated promotion from ci. Merge to deploy; revert to roll back."
-          commit-message: "promote verify-api to staging"
+          branch: promote/staging
+          title: "Promote services ${{ github.sha }} to staging"
+          body: |
+            Automated promotion from CI. Merge to deploy verify-api and risk-scorer; revert to roll back.
+            The staging cluster syncs gitops/staging/tenants.yaml. The lab cluster does not.
+          commit-message: "promote verify-api and risk-scorer to staging"

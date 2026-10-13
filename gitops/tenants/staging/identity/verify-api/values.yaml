@@ -1,5 +1,5 @@
-# Staging (EKS). Not synced by the lab cluster; shown here to illustrate
-# promotion: CI opens a PR that bumps image.tag, and merging it deploys.
+# Staging (EKS). Synced by gitops/staging/tenants.yaml, not by the lab cluster.
+# CI opens a PR that bumps image.tag; merging it deploys.
 team: identity
 environment: staging
 aws:
