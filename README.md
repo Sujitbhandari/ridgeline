@@ -61,7 +61,7 @@ flowchart LR
 | Area | Where | What it shows |
 |---|---|---|
 | **Golden-path chart** | [`charts/platform-service`](charts/platform-service/) | Size presets (no CPU limit by design), startup/readiness/liveness probes, preStop drain, hard zone spread, PDB, restricted security context, IRSA, default-deny baseline, ServiceMonitor, generated SLO burn-rate alerts, KEDA autoscaling on a custom metric, optional Argo Rollouts canary with automatic SLO analysis, JSON-schema-validated values |
-| **GitOps** | [`gitops/`](gitops/) | Argo CD app-of-apps, sync waves, ApplicationSets for platform components and for tenants (one directory = one service), AppProjects that stop a tenant from creating cluster-scoped objects, prod sync windows |
+| **GitOps** | [`gitops/`](gitops/) | Argo CD app-of-apps, sync waves, ApplicationSets for platform components and for tenants (one directory = one service). The lab syncs `gitops/tenants/lab`. Staging is [`gitops/staging/tenants.yaml`](gitops/staging/tenants.yaml), applied on the staging cluster so a promotion PR deploys there and leaves the laptop lab alone. AppProjects stop a tenant from creating cluster-scoped objects. Prod sync windows freeze weekend changes |
 | **Self-service access** | [`tools/accessctl`](tools/accessctl/), [`access-requests/`](access-requests/) | Go CLI: strict schema, catalog of grantable resources and actions, no wildcards, mandatory expiry per environment, PII needs a risk exception and security review, owner-based approver routing, audit metadata on every rendered object, nightly expiry PRs |
 | **Policy as code** | [`policies/`](policies/) | Kyverno: requests/limits, probes, Pod Security "restricted", trusted registries + immutable tags, cosign signature verification in prod, generated default-deny per namespace. OPA/conftest on Terraform plans: no `*`, no IAM from workloads, no public buckets |
 | **Observability** | [`gitops/platform`](gitops/platform/), [`services/ridgeline_common`](services/ridgeline_common/) | OpenTelemetry SDK + Collector (k8s metadata, OTTL PII redaction, tail sampling keeping all errors and slow traces), Prometheus, Grafana dashboard, Loki with trace↔log links, Jaeger, platform alerts (CPU throttling, pending pods, zone imbalance, connection saturation) |
@@ -143,7 +143,7 @@ This is a lab, so some things are intentionally simplified. In production:
 ```
 services/            verify-api, risk-scorer, shared telemetry/redaction/lifecycle library
 charts/              platform-service golden-path Helm chart (+ CI values)
-gitops/              Argo CD bootstrap, projects, ApplicationSets, platform values, tenant values
+gitops/              Argo CD bootstrap, projects, lab ApplicationSet, staging ApplicationSet, platform values, tenant values
 access-requests/     catalog, AccessRequests per environment, rendered grants
 tools/accessctl/     the access-request CLI (Go)
 policies/            Kyverno guardrails + tests; conftest policies for Terraform plans

@@ -24,6 +24,10 @@ directory under `gitops/tenants/<env>/<namespace>/<service>/` is a service.
 for a high-compliance environment is the git log. Sync waves give a
 deterministic install order (CRDs → operators → telemetry → tenants).
 
+The lab cluster only syncs `gitops/tenants/lab`. Staging lives in
+`gitops/staging/tenants.yaml` and is applied on the staging cluster, so a
+promotion PR does not also roll the laptop lab onto registry images.
+
 **Trade-off:** emergency changes still go through git. `rollout undo` /
 `argo rollouts abort` are the break-glass, and the revert PR follows.
 
@@ -93,8 +97,9 @@ the ticket, requester, expiry and a hash of the request.
 
 **Guardrails:** no wildcards; only catalog actions; per-environment maximum
 duration; PII outside production requires a risk-exception ID, security
-review, and ≤14 days; IRSA roles have a permissions boundary that denies IAM,
-Organizations and CloudTrail regardless of what gets rendered.
+review, and ≤14 days. IRSA roles have a permissions boundary whose Allow
+list is those same catalog actions, plus an explicit Deny for IAM,
+Organizations, and CloudTrail.
 
 ## 10. PII never leaves the process unredacted
 
@@ -105,7 +110,20 @@ the log formatter, and redact again in the OpenTelemetry Collector.
 data (NANP 555-01xx numbers in load tests), matching how real data is
 excluded outside production except under an approved risk exception.
 
-## 11. Python services
+## 11. Collector egress stays on private ranges
+
+**Decision:** the golden-path NetworkPolicy allows OTLP (port 4317) only to
+`10.0.0.0/8`, `172.16.0.0/12`, and `192.168.0.0/16`.
+
+**Why:** the collector is a hostNetwork DaemonSet, so a pod selector cannot
+name it. `0.0.0.0/0` on that port would let every tenant pod reach any
+public address that happens to listen there. Private ranges cover kind
+nodes and EKS node CIDRs.
+
+**Trade-off:** a collector on a public IP would be unreachable. That is the
+intended outcome.
+
+## 12. Python services
 
 **Decision:** the demo services are FastAPI.
 
