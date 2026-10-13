@@ -63,3 +63,16 @@ spec:
       containers:
         - name: app
           image: ghcr.io/sujitbhandari/x:1.0.0
+---
+# A platform component. Tenant guardrails must not apply here, or the
+# Prometheus and collector charts fail admission for :latest or their own
+# resource shape.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: platform-collector
+  namespace: observability
+spec:
+  containers:
+    - name: collector
+      image: otel/opentelemetry-collector-contrib:latest

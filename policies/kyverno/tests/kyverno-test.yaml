@@ -23,3 +23,5 @@ results:
   - { policy: image-provenance, rule: trusted-registry, resources: [cowboy], kind: Pod, result: fail }
   - { policy: image-provenance, rule: no-mutable-tags, resources: [golden-path], kind: Pod, result: pass }
   - { policy: image-provenance, rule: no-mutable-tags, resources: [cowboy, untagged], kind: Pod, result: fail }
+  - { policy: image-provenance, rule: no-mutable-tags, resources: [platform-collector], kind: Pod, result: skip }
+  - { policy: require-resources, rule: requests-and-memory-limit, resources: [platform-collector], kind: Pod, result: skip }

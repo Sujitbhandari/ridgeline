@@ -6,8 +6,10 @@ metadata:
     policies.kyverno.io/title: Immutable tags from trusted registries
     policies.kyverno.io/description: >-
       A moving tag means the thing you rolled back to is not the thing that
-      was running. Images must come from our registry with an immutable tag;
-      in production they must also carry a cosign signature from our CI.
+      was running. Tenant images must come from our registry with an immutable
+      tag. Platform charts are out of scope here, or their own tags would
+      fail admission. In production, tenant images must also carry a cosign
+      signature from our CI.
 spec:
   validationFailureAction: Enforce
   background: true
@@ -29,7 +31,10 @@ spec:
     - name: no-mutable-tags
       match:
         any:
-          - resources: { kinds: [Pod] }
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
       validate:
         message: "Use an immutable tag or digest, not :latest or an untagged image."
         foreach:

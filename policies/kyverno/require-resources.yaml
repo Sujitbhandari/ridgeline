@@ -8,7 +8,9 @@ metadata:
       The scheduler can only pack and protect what it can see. Pods without
       requests are BestEffort: first to be evicted, invisible to bin-packing,
       and the usual cause of noisy-neighbor incidents. A memory limit bounds
-      the blast radius of a leak to one container.
+      the blast radius of a leak to one container. Platform namespaces are
+      exempt: their charts are reviewed by the platform team, and applying
+      this rule cluster-wide rejects Prometheus, Loki, and the collector.
 spec:
   validationFailureAction: Enforce
   background: true
@@ -16,10 +18,10 @@ spec:
     - name: requests-and-memory-limit
       match:
         any:
-          - resources: { kinds: [Pod] }
-      exclude:
-        any:
-          - resources: { namespaces: [kube-system] }
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { ridgeline.dev/tenant: "true" }
       validate:
         message: "Every container needs resources.requests.cpu, resources.requests.memory and resources.limits.memory. Use a size preset in the platform-service chart."
         pattern:
