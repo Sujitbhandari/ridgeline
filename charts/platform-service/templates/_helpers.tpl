@@ -73,6 +73,11 @@ spec:
     seccompProfile:
       type: RuntimeDefault
   {{- if or .Values.scheduling.spreadAcrossZones .Values.scheduling.spreadAcrossNodes }}
+  {{- /* Deployments stamp pod-template-hash. Argo Rollouts stamps rollouts-pod-template-hash. The wrong key makes skew count both revisions together and can stall a canary. */ -}}
+  {{- $spreadHash := "pod-template-hash" -}}
+  {{- if eq .Values.rollout.strategy "canary" }}
+  {{- $spreadHash = "rollouts-pod-template-hash" -}}
+  {{- end }}
   topologySpreadConstraints:
     {{- if .Values.scheduling.spreadAcrossZones }}
     - maxSkew: 1
@@ -81,7 +86,7 @@ spec:
       labelSelector:
         matchLabels:
           {{- include "ps.selectorLabels" . | nindent 10 }}
-      matchLabelKeys: [pod-template-hash]
+      matchLabelKeys: [{{ $spreadHash }}]
     {{- end }}
     {{- if .Values.scheduling.spreadAcrossNodes }}
     - maxSkew: 1
@@ -90,7 +95,7 @@ spec:
       labelSelector:
         matchLabels:
           {{- include "ps.selectorLabels" . | nindent 10 }}
-      matchLabelKeys: [pod-template-hash]
+      matchLabelKeys: [{{ $spreadHash }}]
     {{- end }}
   {{- end }}
   {{- with .Values.scheduling.nodeSelector }}
