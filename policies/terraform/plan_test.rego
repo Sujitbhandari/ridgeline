@@ -18,6 +18,10 @@ test_iam_in_workload_policy_denied if {
 	contains(msg, "may not grant IAM")
 }
 
+test_service_wildcard_denied if {
+	count(deny) > 0 with input as policy({"Statement": [{"Effect": "Allow", "Action": ["s3:*"], "Resource": "*"}]})
+}
+
 test_least_privilege_allowed if {
 	count(deny) == 0 with input as policy({"Statement": [{"Effect": "Allow", "Action": ["dynamodb:GetItem"], "Resource": ["arn:aws:dynamodb:us-east-1:1:table/x"]}]})
 }

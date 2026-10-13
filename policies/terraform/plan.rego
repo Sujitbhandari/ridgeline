@@ -30,8 +30,8 @@ deny contains msg if {
 	some st in statements(doc)
 	st.Effect == "Allow"
 	some a in as_list(st.Action)
-	a in {"*", "iam:*"}
-	msg := sprintf("%s: Allow on %q is never acceptable", [addr, a])
+	contains(a, "*")
+	msg := sprintf("%s: wildcard action %q is never acceptable", [addr, a])
 }
 
 deny contains msg if {

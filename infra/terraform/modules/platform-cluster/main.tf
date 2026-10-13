@@ -133,15 +133,20 @@ module "ebs_csi_irsa" {
   tags = local.tags
 }
 
-# Defense in depth for self-service access: whatever an AccessRequest renders,
-# a workload role can never manage IAM, touch the org, disable logging, or
-# act outside the services the platform supports.
+# Defense in depth for self-service access. The boundary is the ceiling:
+# an identity policy rendered by accessctl can only grant actions in this
+# list (the same ones access-requests/catalog.yaml offers). Resource ARNs
+# stay constrained by that identity policy. A workload role still cannot
+# manage IAM, touch the org, or disable logging.
 data "aws_iam_policy_document" "workload_boundary" {
   statement {
-    sid    = "PlatformSupportedServices"
+    sid    = "CatalogActionsOnly"
     effect = "Allow"
     actions = [
-      "dynamodb:*", "sqs:*", "s3:*", "kms:Decrypt", "kms:GenerateDataKey",
+      "dynamodb:GetItem", "dynamodb:Query", "dynamodb:BatchGetItem", "dynamodb:PutItem",
+      "sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes",
+      "s3:GetObject", "s3:PutObject",
+      "kms:Decrypt", "kms:GenerateDataKey",
       "secretsmanager:GetSecretValue",
     ]
     resources = ["*"]
