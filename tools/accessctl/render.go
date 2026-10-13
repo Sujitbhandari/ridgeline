@@ -131,8 +131,12 @@ func RenderNetwork(p *Plan) ([]obj, error) {
 		switch r.Kind {
 		case "service":
 			port := []obj{{"protocol": "TCP", "port": r.Port}}
+			// Include the resource id. Two service grants in one request would
+			// otherwise render two policies with the same name, and the second
+			// apply would drop the first.
+			suffix := sanitize(r.ID)
 			out = append(out,
-				networkPolicy(name+"-egress", w.Namespace, meta, from, "Egress", obj{
+				networkPolicy(name+"-"+suffix+"-egress", w.Namespace, meta, from, "Egress", obj{
 					"egress": []obj{{
 						"to": []obj{{
 							"namespaceSelector": obj{"matchLabels": obj{"kubernetes.io/metadata.name": r.Namespace}},
@@ -141,7 +145,7 @@ func RenderNetwork(p *Plan) ([]obj, error) {
 						"ports": port,
 					}},
 				}),
-				networkPolicy(name+"-ingress", r.Namespace, meta, obj{"app.kubernetes.io/name": r.App}, "Ingress", obj{
+				networkPolicy(name+"-"+suffix+"-ingress", r.Namespace, meta, obj{"app.kubernetes.io/name": r.App}, "Ingress", obj{
 					"ingress": []obj{{
 						"from": []obj{{
 							"namespaceSelector": obj{"matchLabels": obj{"kubernetes.io/metadata.name": w.Namespace}},

@@ -10,7 +10,7 @@ metadata:
     ridgeline.dev/ticket: PLAT-142
   labels:
     app.kubernetes.io/managed-by: accessctl
-  name: access-verify-api-score-and-publish-egress
+  name: access-verify-api-score-and-publish-svc-risk-scorer-egress
   namespace: identity
 spec:
   egress:
@@ -41,7 +41,7 @@ metadata:
     ridgeline.dev/ticket: PLAT-142
   labels:
     app.kubernetes.io/managed-by: accessctl
-  name: access-verify-api-score-and-publish-ingress
+  name: access-verify-api-score-and-publish-svc-risk-scorer-ingress
   namespace: risk
 spec:
   ingress:

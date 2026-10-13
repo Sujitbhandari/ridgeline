@@ -195,6 +195,10 @@ func TestRenderNetworkOpensBothSides(t *testing.T) {
 	if ns[0] != "identity" || ns[1] != "risk" {
 		t.Fatalf("namespaces = %v", ns)
 	}
+	names := []string{nps[0]["metadata"].(obj)["name"].(string), nps[1]["metadata"].(obj)["name"].(string)}
+	if names[0] != "access-test-req-svc-risk-scorer-egress" || names[1] != "access-test-req-svc-risk-scorer-ingress" {
+		t.Fatalf("names = %v", names)
+	}
 }
 
 func TestCLIRenderRefusesInvalid(t *testing.T) {
