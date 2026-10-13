@@ -85,7 +85,8 @@ disruptionBudget:
 observability:
   scrapeInterval: 15s
   # Node-local OpenTelemetry Collector (DaemonSet), reached via the host IP so
-  # spans never cross a zone boundary before batching.
+  # spans never cross a zone boundary before batching. The chart's NetworkPolicy
+  # allows that port only toward private ranges, not the public internet.
   otlpPort: 4317
   alertSeverityPage: page
   alertSeverityTicket: ticket

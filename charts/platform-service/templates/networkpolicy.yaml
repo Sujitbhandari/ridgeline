@@ -54,9 +54,12 @@ spec:
       ports:
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
-    # OTLP to the collector on this node (hostNetwork DaemonSet port).
+    # OTLP to the collector DaemonSet (hostNetwork). Private ranges cover
+    # kind node IPs and EKS node CIDRs, and do not open this port to the
+    # public internet. Any other egress still needs an AccessRequest.
     - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
+        - ipBlock: { cidr: 10.0.0.0/8 }
+        - ipBlock: { cidr: 172.16.0.0/12 }
+        - ipBlock: { cidr: 192.168.0.0/16 }
       ports:
         - { protocol: TCP, port: {{ .Values.observability.otlpPort }} }
