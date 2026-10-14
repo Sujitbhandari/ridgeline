@@ -40,9 +40,12 @@ access-render: ## Re-render IAM/NetworkPolicy from AccessRequests (commit the re
 check: test lint chart-check policy-test access-check ## Everything
 
 ## --- Local lab ---------------------------------------------------------------
-.PHONY: lab-up lab-down images load ui
+.PHONY: lab-up up-lite lab-down images load ui ui-lite
 lab-up: ## Create the kind cluster and bootstrap the platform via Argo CD
 	scripts/lab-up.sh
+
+up-lite: ## Low-resource lab: kind, both services, the chart, Prometheus + Grafana only
+	scripts/up-lite.sh
 
 lab-down: ## Delete the kind cluster
 	kind delete cluster --name ridgeline
@@ -66,4 +69,11 @@ ui: ## Port-forward Grafana :3000, Prometheus :9090, Jaeger :16686, Argo CD :808
 	kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090:9090 >/dev/null & \
 	kubectl -n observability port-forward svc/jaeger 16686:16686 >/dev/null & \
 	kubectl -n argocd port-forward svc/argocd-server 8081:80 >/dev/null & \
+	wait
+
+ui-lite: ## Port-forward Grafana :3000 and Prometheus :9090 (after make up-lite)
+	@echo "Grafana admin / ridgeline-lab"
+	@trap 'kill 0' EXIT; \
+	kubectl -n observability port-forward svc/kube-prometheus-stack-grafana 3000:80 >/dev/null & \
+	kubectl -n observability port-forward svc/kube-prometheus-stack-prometheus 9090:9090 >/dev/null & \
 	wait

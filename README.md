@@ -100,6 +100,24 @@ make load RPS=100     # in-cluster k6 against verify-api
 
 Then open [`labs/README.md`](labs/README.md).
 
+## Run in Codespaces
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Sujitbhandari/ridgeline)
+
+The devcontainer asks for a 4-core, 16 GB machine and comes with Docker,
+kind, kubectl, Helm, Go and k6 installed.
+
+```bash
+make up-lite          # kind + Calico, Prometheus + Grafana, both services (~5 min)
+make ui-lite          # Grafana :3000, Prometheus :9090
+make load RPS=50
+```
+
+`up-lite` skips Argo CD, Kyverno, KEDA, Argo Rollouts, Loki, Jaeger and the
+collector, so services run without autoscaling or canaries. On a bigger
+machine, `make lab-up` and `make ui` run the full platform. The Ports tab
+labels Grafana, Prometheus, Jaeger and Argo CD.
+
 Try the access workflow without a cluster:
 
 ```bash
